@@ -131,7 +131,6 @@ class TSCSimulator:
         self.vehicle_depart_time = {}
         self.vehicle_arrival_time = {}
         self.vehicle_travel_time = {}
-        # 用于缓存信号灯抢占切换阶段状态
         self.emv_signal_buffer = {}
         self.data = {
         "time": [], 
@@ -156,17 +155,17 @@ class TSCSimulator:
         route_name = sumocfg_file.split("/")[-1][:-8]   #fenglin
         net_file = "/".join(sumocfg_file.split("/")[:-1] + [route_name + '.net.xml'])
         self.net = readNet(net_file)
-        #     route = "/".join(sumocfg_file.split("/")[:-1] + [route_name])
-        #     command = [
-        #         checkBinary(app), '-c', net, '-r', route + '_' + str(self.step_num) + '.trip.xml']
-        #     command += ['-a', "/".join(sumocfg_file.split("/")[:-1] + ['e1.add.xml']) + ", " +
-        #                 "/".join(sumocfg_file.split("/")[:-1] + ['e2.add.xml'])]
-        # else:
-        #     command = [checkBinary(app), '-c', sumocfg_file]
+            route = "/".join(sumocfg_file.split("/")[:-1] + [route_name])
+            command = [
+                checkBinary(app), '-c', net, '-r', route + '_' + str(self.step_num) + '.trip.xml']
+            command += ['-a', "/".join(sumocfg_file.split("/")[:-1] + ['e1.add.xml']) + ", " +
+                        "/".join(sumocfg_file.split("/")[:-1] + ['e2.add.xml'])]
+        else:
+            command = [checkBinary(app), '-c', sumocfg_file]
         command = [checkBinary(app), '-c', sumocfg_file]
-        # command += ['--seed',str(seed)]
+        command += ['--seed',str(seed)]
         command += ['--random']
-        # command += ['--remote-port', str(self.port)]
+        command += ['--remote-port', str(self.port)]
         command += ['--no-step-log', 'True']
         if self.name != 'real_net':
             command += ['--time-to-teleport',
@@ -233,15 +232,14 @@ class TSCSimulator:
 
     def do_action_emv(self):
         emv_phase_changes = {}  # {tl_id: [(phase_index, duration)]}
-        default_duration = 1  # 默认推进时长为1秒
+        default_duration = 1 
 
-        # === 第一阶段：识别黄灯缓存，或检测新的EMV ===
         for tl in self.all_tls:
-            # --- Step 1: 若在黄灯等待期间，检查是否要切换到绿灯 ---
+            # --- Step 1: 
             if tl in self.emv_signal_buffer:
                 target_phase, remaining_yellow = self.emv_signal_buffer[tl]
                 if remaining_yellow <= 1:
-                    emv_phase_changes[tl] = [(target_phase, 10)]  # 切绿灯
+                    emv_phase_changes[tl] = [(target_phase, 10)] 
                     del self.emv_signal_buffer[tl]
                 else:
                     self.emv_signal_buffer[tl] = (target_phase, remaining_yellow - 1)
@@ -272,7 +270,6 @@ class TSCSimulator:
                     dist = next_tls[0][2]
                     current_phase = self.sim.trafficlight.getPhase(tl_id)
 
-                    # --- 若当前相位不是紧急车通行方向，则尝试切黄灯 ---
                     if not self._is_emv_direction(tl_id, current_phase, emv_lane):
                         yellow_phase = current_phase + 1
                         target_phase = self._get_emv_green_phase(tl_id, emv_lane)
@@ -296,15 +293,12 @@ class TSCSimulator:
             for phase_index, duration in phase_list:
                 self._crosses[tl_id].set_phase_by_index(phase_index, duration)
 
-        # === 第三阶段：推进仿真 ===
         self._current_time += 1
         # self.sim.simulationStep(self._current_time)
 
     def _is_emv_direction(self, tl_id, phase_index, emv_lanes):
         """
-        判断当前相位是否允许EMV方向通行
         """
-        # 获取信号灯的当前控制逻辑
         logic = self.sim.trafficlight.getCompleteRedYellowGreenDefinition(tl_id)[1]
         phase = logic.getPhases()[phase_index]
 
@@ -320,7 +314,6 @@ class TSCSimulator:
 
     def _get_emv_green_phase(self, tl_id, emv_lanes):
         """
-        获取使EMV通行的信号灯相位索引
         """
         logic = self.sim.trafficlight.getCompleteRedYellowGreenDefinition(tl_id)[0]
         controlled_lanes = self.sim.trafficlight.getControlledLanes(tl_id)
@@ -331,7 +324,6 @@ class TSCSimulator:
                     lane = controlled_lanes[idx]
                     if lane in emv_lanes:
                         return i
-        # 没有找到就默认返回第0相位（需谨慎）
         return 0
 
     def _do_action_tls(self, action):
@@ -416,24 +408,15 @@ class TSCSimulator:
         return list_reward
 
     def get_neighbors_of_traffic_lights(tl_id):
-        """
-        获取给定信号灯的邻居信号灯ID
-        :param tl_id: 信号灯的ID
-        :return: 邻居信号灯的ID列表
-        """
-        # 获取该信号灯所处的交叉口
+
         junction_id = traci.trafficlight.getLinkedJunction(tl_id)
 
-        # 获取该交叉口的所有信号灯
         all_tl_ids = traci.trafficlight.getIDList()
 
-        # 获取邻近信号灯的ID
         neighbors = []
         for other_tl_id in all_tl_ids:
-            if other_tl_id != tl_id:  # 排除当前信号灯
-                # 获取邻近信号灯的交叉口ID
+            if other_tl_id != tl_id:  
                 other_junction_id = traci.trafficlight.getLinkedJunction(other_tl_id)
-                # 判断是否属于相邻的交叉口
                 if other_junction_id != junction_id:
                     neighbors.append(other_tl_id)
 
@@ -529,10 +512,8 @@ class TSCSimulator:
                 import datetime
                 import os
 
-                # 获取当前时间并格式化为字符串
                 time_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-                # 组合文件名
                 main_path = os.path.join(output_dir, f"trajectory_data_{time_str}.csv")
 
                 # 分离相位数据单独保存
@@ -548,36 +529,25 @@ class TSCSimulator:
                             "sim_time": self._current_time,
                             "phases": phase_data
                         }, f)
-                        f.write("\n")  # 换行分隔记录
-                
-                # 保存剩余数据到主CSV文件
-                if self.data:  # 确保有数据再保存
+                        f.write("\n") 
+
+                if self.data: 
                     main_path = os.path.join(output_dir, f"trajectory_data_{time_str}.csv")
                     pd.DataFrame(self.data).to_csv(
                         main_path,
-                        mode='a',  # 追加模式
-                        header=not os.path.exists(main_path),  # 如果文件不存在则写表头
+                        mode='a', 
+                        header=not os.path.exists(main_path),  
                         index=False
                     )
                     
-                print(f"数据已保存到 {output_dir}")
+                print(f"save {output_dir}")
                 
             except Exception as e:
-                print(f"数据保存失败: {str(e)}")
-                # 可以添加失败数据备份逻辑
+                print(f"faile: {str(e)}")
                 with open(f"{output_dir}/error_backup.txt", "a") as f:
                     f.write(f"{self._current_time}: {str(self.data)}\n")
             self.terminate()
-        # if "emergency_7" in self.sim.vehicle.getIDList():
-        #     # 获取车辆位置 (x, y 坐标)
-        #     position = self.sim.vehicle.getPosition("emergency_7")
-        #     print(f"Emergency vehicle 7 current position: {position}")
-        #
-        #     # 获取即将到达的红绿灯状态
-        #     traffic_light = self.sim.vehicle.getNextTLS("emergency_7")
-        #     # if traffic_light:
-        #     #     traffic_light_status = self.sim.trafficlight.getPhaseName(traffic_light[0])
-        #     print(f"Next traffic light status for emergency vehicle 7: {traffic_light[0]}")
+
         emv = [int(agent_id.split('_')[-1]) for agent_id in self.all_emv]
         ve = list(map(int, self.all_ves))
 
@@ -586,15 +556,12 @@ class TSCSimulator:
     def update_vehicle_travel_time(self):
         current_time = self.sim.simulation.getTime()
 
-        # 获取当前在网车辆
         vehicle_ids = self.sim.vehicle.getIDList()
 
-        # 记录新进入车辆的时间
         for veh_id in vehicle_ids:
             if veh_id not in self.vehicle_depart_time:
                 self.vehicle_depart_time[veh_id] = current_time
 
-        # 记录已经离开的车辆的到达时间
         arrived_vehicles = self.sim.simulation.getArrivedIDList()
         for veh_id in arrived_vehicles:
             self.vehicle_arrival_time[veh_id] = current_time
@@ -1041,7 +1008,7 @@ class TSCSimulator:
                     self.emv_agent[vehicle_id] = VehicleAgent(vehicle_id, self, self.all_tls)
                     new_emv.append(vehicle_id)
         return new_ves, new_emv
-        #该函数需要修改-这个代码有问题！！！
+
     # def get_vehicle_agent(self):
     #     self.vehicle_num_agents = 0
     #     self.emv_num_agents = 0
@@ -1105,24 +1072,21 @@ class TSCSimulator:
         # 生成信号灯间的边（无向）
         for signal, neigh_list in neighbor_tl.items():
             for neighbor in neigh_list:
-                signal_id = self.all_tls.index(signal)  # 获取信号灯 ID 在列表中的索引
-                neighbor_id = self.all_tls.index(neighbor)  # 获取邻居信号灯的 ID 索引
+                signal_id = self.all_tls.index(signal)  
+                neighbor_id = self.all_tls.index(neighbor)  
 
-                # 将边按（较小的索引，较大的索引）顺序添加到集合中，保证无向
                 if signal_id < neighbor_id:
                     edges_set.add((signal_id, neighbor_id))
                 else:
                     edges_set.add((neighbor_id, signal_id))
 
-        # 将去重后的边集合转换为张量
         signal_to_signal_edges = torch.tensor(list(edges_set)).t()
         self.hetero_graph['signal_light', 'connects', 'signal_light'].edge_index = signal_to_signal_edges
 
     def build_hetero_graph(self, obs, ve_obs, emv_obs):
-        # 遍历所有交通信号灯
         self.reset_hetero_graph()
-        self.hetero_graph['signal_light'].x = obs  # 信号灯的特征
-        self.hetero_graph['emergency'].x = emv_obs    #信号灯特征
+        self.hetero_graph['signal_light'].x = obs  
+        self.hetero_graph['emergency'].x = emv_obs    
         self.hetero_graph['vehicle'].x = ve_obs
         neighbor_tl_ve = {}
         if len(ve_obs) > 0:
@@ -1134,7 +1098,7 @@ class TSCSimulator:
                 # for j, vehicle in enumerate(self.all_ves):
                 edges = []
                 edges_emv = []
-                vehicle_tl_map = {}  # 存储每辆车对应的信号灯 ID
+                vehicle_tl_map = {} 
                 emergency_tl_map = {}
 
                 for signal, vehicles in neighbor_tl_ve.items():
@@ -1150,17 +1114,17 @@ class TSCSimulator:
                 if len(edges_emv) > 0:
                     self.hetero_graph['signal_light', 'important', 'emergency'].edge_index = torch.tensor(edges_emv).t()
 
-            # **新增：计算普通车辆与紧急车辆的相似度，并构建边**
+
             if len(ve_obs) > 0 and len(emv_obs) > 0:
-                # 1. 先筛选出连接到同一个信号灯的普通车辆 & 紧急车辆
+  
                 same_tl_pairs = []
                 for ve, tl_id in vehicle_tl_map.items():
                     for emv, emv_tl_id in emergency_tl_map.items():
-                        if tl_id == emv_tl_id:  # 只有同一个信号灯的车辆才计算
+                        if tl_id == emv_tl_id:  
                             same_tl_pairs.append((int(ve), int(emv.split('_')[-1])))
 
                     if same_tl_pairs:
-                        # 4. 生成边索引
+        
                         vehicle_to_emergency_edges = torch.tensor(same_tl_pairs).t()
                         self.hetero_graph['vehicle', 'similar_to', 'emergency'].edge_index = vehicle_to_emergency_edges
 
@@ -1186,24 +1150,18 @@ class TSCSimulator:
 
 
     def ve_batch(self, env_output, use_keys, all_ves):
-        # 使用 NumPy 数组初始化 emv_obs，形状为 (num_emv_agents, len(use_keys))
         emv_obs = np.full((self.num_vehicle_agents, len(use_keys)), 0, dtype=int)
 
-        # 遍历所有的 agent，填充对应的数据
         for i, agent_id in enumerate(all_ves):
             state = env_output[agent_id]
-            # 根据 use_keys 提取指定字段的数据，若字段不存在，使用默认值 -1
             emv_obs[int(agent_id), :] = np.array([state.get(key, 0) for key in use_keys], dtype=int)
         return emv_obs
 
     def emv_batch(self, env_output, use_keys, all_emv):
-        # 使用 NumPy 数组初始化 emv_obs，形状为 (num_emv_agents, len(use_keys))
         emv_obs = np.full((self.num_emv_agents, len(use_keys)), 0, dtype=int)
 
-        # 遍历所有的 agent，填充对应的数据
         for i, agent_id in enumerate(all_emv):
             state = env_output[agent_id]
-            # 根据 use_keys 提取指定字段的数据，若字段不存在，使用默认值 ''
             emv_obs[int(agent_id.split('_')[-1]), :] = np.array([state.get(key, 0) for key in use_keys], dtype=int)
 
         return emv_obs
@@ -1385,19 +1343,16 @@ class TSCSimulator:
             
 
             if len(self.sim.vehicle.getNextTLS(veh_id)) >0:
-                # 获取当前灯状态字符串，比如 'rrGGrr'
                 tls_id = self.sim.vehicle.getNextTLS(veh_id)[0][0]
                 light_state = self.sim.trafficlight.getRedYellowGreenState(tls_id)
 
-                # 获取 tls_id 控制的 lane-link 列表
                 links = self.sim.trafficlight.getControlledLinks(tls_id)
 
-                # 查找车辆 lane_id 所对应的 link index
                 signal_color = None
                 for idx, link_list in enumerate(links):
                     for link in link_list:  # 每个 link 是一个 tuple: (fromLane, toLane, via)
                         if link[0] == lane_id:
-                            signal_color = light_state[idx]  # 红绿灯状态字符
+                            signal_color = light_state[idx] 
                             break
                     if signal_color is not None:
                         break
@@ -1477,19 +1432,18 @@ if __name__ == '__main__':
         if '24' in env.sim.vehicle.getIDList():
             print(env.sim.vehicle.getRoadID('24'))
         # current_time = traci.simulation.getTime()
-        
-        # # 记录所有车辆数据
+
         # for veh_id in traci.vehicle.getIDList():
         #     data["time"].append(current_time)
         #     data["vehicle_id"].append(veh_id)
         #     data["speed"].append(traci.vehicle.getSpeed(veh_id))
         #     data["lane_id"].append(traci.vehicle.getLaneID(veh_id))
         
-        # # 记录信号灯状态（可选）
+
         # for tl_id in traci.trafficlight.getIDList():
         #     print(f"Signal {tl_id} state: {traci.trafficlight.getRedYellowGreenState(tl_id)}")
 
-    # 保存为CSV
+
     pd.DataFrame(data).to_csv("/home/PhD/ChenM/experiment/CoEMV/onpolicy/envs/sumo_files_marl/vehicle_data.csv", index=False)
     traci.close()
     # for i in range(3600):
